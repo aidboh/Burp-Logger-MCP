@@ -2,6 +2,7 @@ package com.burpmcp;
 
 import burp.api.montoya.BurpExtension;
 import burp.api.montoya.MontoyaApi;
+import burp.api.montoya.persistence.PersistedObject;
 import com.burpmcp.capture.HttpCaptureHandler;
 import com.burpmcp.config.LoggingConfig;
 import com.burpmcp.db.LogStore;
@@ -12,6 +13,7 @@ import com.burpmcp.ui.ConfigPanel;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.UUID;
 
 /**
  * Burp auto-discovers the class implementing BurpExtension in the loaded jar.
@@ -30,8 +32,18 @@ public class LoggerMcpExtension implements BurpExtension {
         api.extension().setName("Burp Logger MCP");
 
         try {
-            // Persisted under the user's home so logs survive Burp restarts and project changes.
-            Path dbPath = Paths.get(System.getProperty("user.home"), ".burp-logger-mcp", "logs.db");
+            // Per-project storage: stash a stable UUID inside THIS Burp project (extensionData lives
+            // in the project file), then name the SQLite file after it. Each project gets its own DB,
+            // so logs from one project never appear in another. Note: for a *temporary* project this
+            // data lives only in memory, so its logs won't survive a restart (nothing to tie them to).
+            PersistedObject projectData = api.persistence().extensionData();
+            String projectId = projectData.getString("projectId");
+            if (projectId == null) {
+                projectId = UUID.randomUUID().toString();
+                projectData.setString("projectId", projectId);
+            }
+            Path dbPath = Paths.get(System.getProperty("user.home"),
+                    ".burp-logger-mcp", "projects", projectId + ".db");
             store = new LogStore(dbPath, api.logging()::logToOutput);
 
             LoggingConfig config = new LoggingConfig(store);

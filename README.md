@@ -59,6 +59,20 @@ bridge with `mcp-remote`:
 
 Clients that support an HTTP/Streamable transport directly can point at that URL.
 
+For kiro use the following:
+
+```json
+{
+  "mcpServers": {
+    "burp-logs": {
+      "url": "http://127.0.0.1:8765/mcp",
+      "disabled": false,
+      "autoApprove": []
+    }
+  }
+}
+```
+
 ## Notes & next steps
 
 - The `HttpHandler` registered on `api.http()` receives Proxy traffic too (tool = `PROXY`).

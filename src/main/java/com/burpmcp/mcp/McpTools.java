@@ -198,7 +198,7 @@ public class McpTools {
                     if (tool == null || !args.has("enabled"))
                         return fail(error, "tool and enabled are required");
                     boolean valid = false;
-                    for (ToolType t : ToolType.values()) if (t.name().equalsIgnoreCase(tool)) { tool = t.name(); valid = true; break; }
+                    for (ToolType t : LoggingConfig.TRACKED_TOOLS) if (t.name().equalsIgnoreCase(tool)) { tool = t.name(); valid = true; break; }
                     if (!valid) return fail(error, "unknown tool: " + tool);
                     config.setEnabled(tool, args.get("enabled").getAsBoolean());
                     return gson.toJson(config.snapshot());

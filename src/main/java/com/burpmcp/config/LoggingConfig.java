@@ -13,6 +13,16 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class LoggingConfig {
 
+    /**
+     * The only Burp tools this extension tracks and shows. These are the tools that actually
+     * originate HTTP traffic; the rest (Logger, Decoder, Comparer, Suite, Organizer, …) never
+     * send requests, so logging them would capture nothing.
+     */
+    public static final ToolType[] TRACKED_TOOLS = {
+            ToolType.TARGET, ToolType.PROXY, ToolType.SCANNER,
+            ToolType.INTRUDER, ToolType.REPEATER, ToolType.EXTENSIONS
+    };
+
     private static final String KEY = "logging.tools";
     private final LogStore store;
     private final Map<String, Boolean> enabled = new ConcurrentHashMap<>();
@@ -24,12 +34,14 @@ public class LoggingConfig {
 
     private void load() {
         // Sensible defaults; the tools a pentester usually cares about.
-        for (ToolType t : ToolType.values()) enabled.put(t.name(), defaultFor(t));
+        for (ToolType t : TRACKED_TOOLS) enabled.put(t.name(), defaultFor(t));
         String raw = store.getConfig(KEY);
         if (raw != null && !raw.isBlank()) {
             for (String pair : raw.split(",")) {
                 String[] kv = pair.split("=", 2);
-                if (kv.length == 2) enabled.put(kv[0].trim(), Boolean.parseBoolean(kv[1].trim()));
+                // Only apply persisted values for tools we still track (ignore stale entries).
+                if (kv.length == 2 && enabled.containsKey(kv[0].trim()))
+                    enabled.put(kv[0].trim(), Boolean.parseBoolean(kv[1].trim()));
             }
         }
     }

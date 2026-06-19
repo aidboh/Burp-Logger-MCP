@@ -29,6 +29,7 @@ import org.sqlite.Function;
 public class LogStore {
 
     private final Connection conn;
+    private final Path dbPath;
     private final Object lock = new Object();
     private final BlockingQueue<LogEntry> queue = new LinkedBlockingQueue<>();
     private final Thread writer;
@@ -40,6 +41,7 @@ public class LogStore {
 
     public LogStore(Path dbPath, Consumer<String> log) throws Exception {
         this.log = log;
+        this.dbPath = dbPath;
         Files.createDirectories(dbPath.getParent());
         // sqlite-jdbc registers itself, but be explicit so the driver loads inside Burp's classloader.
         Class.forName("org.sqlite.JDBC");
@@ -294,7 +296,14 @@ public class LogStore {
             try (PreparedStatement ps = conn.prepareStatement(sb.toString())) {
                 bind(ps, args);
                 int n = ps.executeUpdate();
-                try (Statement st = conn.createStatement()) { st.execute("PRAGMA wal_checkpoint(TRUNCATE)"); }
+                try (Statement st = conn.createStatement()) {
+                    st.execute("PRAGMA wal_checkpoint(TRUNCATE)");
+                    // Full purge (Purge ALL): rebuild the file so freed pages are returned to the OS,
+                    // not just marked reusable. Cheap here because the table is now empty.
+                    if (tool == null && beforeTimestamp == null) {
+                        st.execute("VACUUM");
+                    }
+                }
                 return n;
             } catch (SQLException ex) {
                 log.accept("[burpmcp] purge error: " + ex);
@@ -324,7 +333,32 @@ public class LogStore {
             }
         }
         out.put("by_tool", byTool);
+        long bytes = dbSizeBytes();
+        out.put("db_bytes", bytes);
+        out.put("db_size", humanBytes(bytes));
         return out;
+    }
+
+    /** On-disk size of the store: the .db file plus its WAL/SHM sidecars (0 if not yet created). */
+    public long dbSizeBytes() {
+        long total = 0;
+        for (String suffix : new String[]{"", "-wal", "-shm"}) {
+            try {
+                Path p = dbPath.resolveSibling(dbPath.getFileName().toString() + suffix);
+                if (Files.exists(p)) total += Files.size(p);
+            } catch (Exception ignored) {}
+        }
+        return total;
+    }
+
+    /** Formats a byte count as B / KB / MB / GB. */
+    public static String humanBytes(long bytes) {
+        if (bytes < 1024) return bytes + " B";
+        String[] units = {"KB", "MB", "GB", "TB"};
+        double v = bytes;
+        int i = -1;
+        do { v /= 1024.0; i++; } while (v >= 1024 && i < units.length - 1);
+        return String.format("%.1f %s", v, units[i]);
     }
 
     // ---- Config (per-tool logging toggles, etc.) ----

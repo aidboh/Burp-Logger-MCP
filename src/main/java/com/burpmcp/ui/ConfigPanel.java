@@ -11,23 +11,27 @@ import java.util.Map;
 
 /**
  * "Logger MCP" suite tab: an "All tools" master toggle plus a per-tool toggle and purge button
- * for each tracked tool, and a purge-everything button. Only the request-originating tools
- * (LoggingConfig.TRACKED_TOOLS) are shown.
+ * for each tracked tool, a purge-everything button, the MCP endpoint, and a live storage readout.
+ * Only the request-originating tools (LoggingConfig.TRACKED_TOOLS) are shown.
  */
 public class ConfigPanel extends JPanel {
 
     private final Map<String, JCheckBox> toolBoxes = new LinkedHashMap<>();
+    private final LogStore store;
+    private final JLabel storageLabel = new JLabel();
 
     public ConfigPanel(LogStore store, LoggingConfig config, String serverUrl) {
+        this.store = store;
         setLayout(new BorderLayout(10, 10));
         setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
 
         JLabel header = new JLabel("Burp Logger MCP");
         header.setFont(header.getFont().deriveFont(Font.BOLD, 16f));
         JLabel sub = new JLabel("MCP endpoint: " + serverUrl);
-        JPanel top = new JPanel(new GridLayout(2, 1));
+        JPanel top = new JPanel(new GridLayout(3, 1));
         top.add(header);
         top.add(sub);
+        top.add(storageLabel);
         add(top, BorderLayout.NORTH);
 
         JPanel grid = new JPanel(new GridBagLayout());
@@ -39,8 +43,7 @@ public class ConfigPanel extends JPanel {
 
         // "All tools" master toggle (row 0).
         JCheckBox allBox = new JCheckBox("All tools");
-        Font f = allBox.getFont();
-        allBox.setFont(f.deriveFont(Font.BOLD));
+        allBox.setFont(allBox.getFont().deriveFont(Font.BOLD));
         c.gridx = 0; c.gridy = 0;
         grid.add(allBox, c);
 
@@ -61,6 +64,7 @@ public class ConfigPanel extends JPanel {
             JButton purge = new JButton("Purge " + tool);
             purge.addActionListener(e -> {
                 int n = store.purge(tool, null);
+                updateStorage();
                 JOptionPane.showMessageDialog(this, "Deleted " + n + " entries from " + tool);
             });
             grid.add(purge, c);
@@ -78,18 +82,28 @@ public class ConfigPanel extends JPanel {
         });
 
         c.gridx = 0; c.gridy = row; c.gridwidth = 2;
-        JButton purgeAll = new JButton("Purge ALL logs");
+        JButton purgeAll = new JButton("Purge ALL Logs / Reset Project DB");
         purgeAll.addActionListener(e -> {
             int ok = JOptionPane.showConfirmDialog(this,
-                    "Delete every log entry?", "Confirm", JOptionPane.YES_NO_OPTION);
+                    "Delete all logs for this project and compact the database?",
+                    "Confirm", JOptionPane.YES_NO_OPTION);
             if (ok == JOptionPane.YES_OPTION) {
                 int n = store.purge(null, null);
+                updateStorage();
                 JOptionPane.showMessageDialog(this, "Deleted " + n + " entries");
             }
         });
         grid.add(purgeAll, c);
 
         add(new JScrollPane(grid), BorderLayout.CENTER);
+
+        // Live storage readout: refresh now, then every 3s on the EDT.
+        updateStorage();
+        new javax.swing.Timer(3000, e -> updateStorage()).start();
+    }
+
+    private void updateStorage() {
+        storageLabel.setText("Storage used: " + LogStore.humanBytes(store.dbSizeBytes()));
     }
 
     /** True only if every tracked tool's box is checked. */

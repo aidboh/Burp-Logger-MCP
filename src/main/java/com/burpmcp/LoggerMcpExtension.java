@@ -11,9 +11,11 @@ import com.burpmcp.mcp.McpTools;
 import com.burpmcp.scan.IssueProvider;
 import com.burpmcp.ui.ConfigPanel;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 /**
  * Burp auto-discovers the class implementing BurpExtension in the loaded jar.
@@ -26,6 +28,8 @@ public class LoggerMcpExtension implements BurpExtension {
     private LogStore store;
     private HttpCaptureHandler capture;
     private McpHttpServer mcpServer;
+    private Path dbPath;
+    private volatile boolean persistLogs = true;
 
     @Override
     public void initialize(MontoyaApi api) {
@@ -42,9 +46,14 @@ public class LoggerMcpExtension implements BurpExtension {
                 projectId = UUID.randomUUID().toString();
                 projectData.setString("projectId", projectId);
             }
-            Path dbPath = Paths.get(System.getProperty("user.home"),
+            dbPath = Paths.get(System.getProperty("user.home"),
                     ".burp-logger-mcp", "projects", projectId + ".db");
             store = new LogStore(dbPath, api.logging()::logToOutput);
+
+            // Persistence preference lives in the project (default: persist). When off, the project's
+            // DB files are deleted on unload, so that session's logs don't survive.
+            String persistStr = projectData.getString("persistLogs");
+            persistLogs = (persistStr == null) || Boolean.parseBoolean(persistStr);
 
             LoggingConfig config = new LoggingConfig(store);
 
@@ -55,12 +64,19 @@ public class LoggerMcpExtension implements BurpExtension {
             mcpServer = new McpHttpServer(MCP_PORT, tools, api.logging()::logToOutput);
             mcpServer.start();
 
+            Consumer<Boolean> onPersistChange = persist -> {
+                persistLogs = persist;
+                projectData.setString("persistLogs", Boolean.toString(persist));
+            };
+
             String url = "http://127.0.0.1:" + MCP_PORT + "/mcp";
-            api.userInterface().registerSuiteTab("Logger MCP", new ConfigPanel(store, config, url));
+            api.userInterface().registerSuiteTab("Logger MCP",
+                    new ConfigPanel(store, config, url, persistLogs, onPersistChange));
 
             api.extension().registerUnloadingHandler(this::shutdown);
 
-            api.logging().logToOutput("[burpmcp] ready. DB: " + dbPath + "  MCP: " + url);
+            api.logging().logToOutput("[burpmcp] ready. DB: " + dbPath + "  MCP: " + url
+                    + "  persist=" + persistLogs);
         } catch (Exception e) {
             api.logging().logToError("[burpmcp] failed to initialize: " + e);
         }
@@ -70,5 +86,14 @@ public class LoggerMcpExtension implements BurpExtension {
         try { if (mcpServer != null) mcpServer.stop(); } catch (Exception ignored) {}
         try { if (capture != null) capture.close(); } catch (Exception ignored) {}
         try { if (store != null) store.close(); } catch (Exception ignored) {}
+
+        // Non-persistent mode: discard this project's DB so nothing survives the session.
+        if (!persistLogs && dbPath != null) {
+            for (String suffix : new String[]{"", "-wal", "-shm"}) {
+                try {
+                    Files.deleteIfExists(dbPath.resolveSibling(dbPath.getFileName().toString() + suffix));
+                } catch (Exception ignored) {}
+            }
+        }
     }
 }

@@ -8,6 +8,7 @@ import javax.swing.*;
 import java.awt.*;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.function.Consumer;
 
 /**
  * "Logger MCP" suite tab: an "All tools" master toggle plus a per-tool toggle and purge button
@@ -20,7 +21,8 @@ public class ConfigPanel extends JPanel {
     private final LogStore store;
     private final JLabel storageLabel = new JLabel();
 
-    public ConfigPanel(LogStore store, LoggingConfig config, String serverUrl) {
+    public ConfigPanel(LogStore store, LoggingConfig config, String serverUrl,
+                       boolean persist, Consumer<Boolean> onPersistChange) {
         this.store = store;
         setLayout(new BorderLayout(10, 10));
         setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
@@ -28,10 +30,17 @@ public class ConfigPanel extends JPanel {
         JLabel header = new JLabel("Burp Logger MCP");
         header.setFont(header.getFont().deriveFont(Font.BOLD, 16f));
         JLabel sub = new JLabel("MCP endpoint: " + serverUrl);
-        JPanel top = new JPanel(new GridLayout(3, 1));
+
+        JCheckBox persistBox = new JCheckBox("Persist logs to disk (keep after Burp closes)", persist);
+        persistBox.setToolTipText("When off, this project's log database is deleted when the extension "
+                + "unloads (Burp close / project switch). Logs still work normally during the session.");
+        persistBox.addActionListener(e -> onPersistChange.accept(persistBox.isSelected()));
+
+        JPanel top = new JPanel(new GridLayout(4, 1));
         top.add(header);
         top.add(sub);
         top.add(storageLabel);
+        top.add(persistBox);
         add(top, BorderLayout.NORTH);
 
         JPanel grid = new JPanel(new GridBagLayout());
@@ -82,7 +91,7 @@ public class ConfigPanel extends JPanel {
         });
 
         c.gridx = 0; c.gridy = row; c.gridwidth = 2;
-        JButton purgeAll = new JButton("Purge ALL Logs / Reset Project DB");
+        JButton purgeAll = new JButton("Purge ALL Logs / Reset Current Project DB");
         purgeAll.addActionListener(e -> {
             int ok = JOptionPane.showConfirmDialog(this,
                     "Delete all logs for this project and compact the database?",
@@ -96,6 +105,27 @@ public class ConfigPanel extends JPanel {
         grid.add(purgeAll, c);
 
         add(new JScrollPane(grid), BorderLayout.CENTER);
+
+        // Destructive cross-project action, isolated at the bottom-right.
+        JButton deleteAll = new JButton("Delete ALL Project Databases");
+        deleteAll.setToolTipText("Removes the stored logs for EVERY project on disk, not just this one.");
+        deleteAll.addActionListener(e -> {
+            int ok = JOptionPane.showConfirmDialog(this,
+                    "Delete the log databases for ALL projects (every project, not just this one)?\n"
+                    + "This resets the current project and permanently removes every other project's "
+                    + "stored logs from disk.",
+                    "Confirm — Affects ALL Projects", JOptionPane.YES_NO_OPTION);
+            if (ok == JOptionPane.YES_OPTION) {
+                int others = store.deleteOtherProjectDatabases();
+                store.purge(null, null); // reset the current (open) project's DB in place
+                updateStorage();
+                JOptionPane.showMessageDialog(this,
+                        "Reset this project and deleted " + others + " other project database(s).");
+            }
+        });
+        JPanel south = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        south.add(deleteAll);
+        add(south, BorderLayout.SOUTH);
 
         // Live storage readout: refresh now, then every 3s on the EDT.
         updateStorage();

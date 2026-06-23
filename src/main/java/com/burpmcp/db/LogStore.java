@@ -361,6 +361,35 @@ public class LogStore {
         return String.format("%.1f %s", v, units[i]);
     }
 
+    /**
+     * Deletes every OTHER project's database files in the projects directory, leaving this
+     * project's live DB untouched (it's open — callers should reset it in place separately).
+     * Returns the number of project databases (.db files) removed.
+     */
+    public int deleteOtherProjectDatabases() {
+        int deleted = 0;
+        Path dir = dbPath.getParent();
+        String current = dbPath.getFileName().toString(); // <uuid>.db
+        synchronized (lock) {
+            try (java.util.stream.Stream<Path> files = Files.list(dir)) {
+                for (Path p : (Iterable<Path>) files::iterator) {
+                    String name = p.getFileName().toString();
+                    if (name.equals(current) || name.equals(current + "-wal") || name.equals(current + "-shm"))
+                        continue; // never touch the live project's files
+                    if (name.endsWith(".db") || name.endsWith(".db-wal") || name.endsWith(".db-shm")) {
+                        try {
+                            Files.deleteIfExists(p);
+                            if (name.endsWith(".db")) deleted++;
+                        } catch (Exception ignored) {}
+                    }
+                }
+            } catch (Exception ex) {
+                log.accept("[burpmcp] deleteOtherProjectDatabases error: " + ex);
+            }
+        }
+        return deleted;
+    }
+
     // ---- Config (per-tool logging toggles, etc.) ----
 
     public String getConfig(String key) {

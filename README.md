@@ -117,7 +117,4 @@ Kiro, add this to `.kiro/settings/mcp.json` (workspace) or `~/.kiro/settings/mcp
 ## Findings caveats
 
 `list_findings` / `get_finding` read live from `api.siteMap().issues()`. Audit issues only exist in
-Burp editions with **Scanner (Pro/DAST)** — on Community they return nothing. On some older Montoya
-builds, an issue's `requestResponses()` evidence can come back empty even when the GUI shows it;
-if you see `evidence: []` for an issue that clearly has request/response tabs, that's the version
-quirk, not a config problem.
+Burp editions with **Scanner (Pro/DAST)** — on Community they return nothing.

@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "com.burpmcp"
-version = "0.1.1"
+version = "0.1.2"
 
 java {
     toolchain {

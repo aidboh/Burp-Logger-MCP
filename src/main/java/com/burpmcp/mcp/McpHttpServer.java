@@ -245,9 +245,6 @@ public class McpHttpServer {
         if (json != null) sb.append("Content-Type: application/json\r\n");
         sb.append("Content-Length: ").append(bodyBytes.length).append("\r\n");
         sb.append("Mcp-Session-Id: ").append(sessionId).append("\r\n");
-        sb.append("Access-Control-Allow-Origin: *\r\n");
-        sb.append("Access-Control-Allow-Headers: *\r\n");
-        sb.append("Access-Control-Allow-Methods: POST, OPTIONS\r\n");
         sb.append("Connection: close\r\n\r\n");
         out.write(sb.toString().getBytes(StandardCharsets.ISO_8859_1));
         if (bodyBytes.length > 0) out.write(bodyBytes);

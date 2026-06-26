@@ -8,14 +8,18 @@ findings the way Logger++ surfaces them in the UI.
 
 ## Features
 
-- Captures traffic from all tools via a single `HttpHandler`, with per-message **tool attribution**.
+- Captures traffic from the request-originating tools (Target, Proxy, Scanner, Intruder, Repeater,
+  Extensions) via a single `HttpHandler`, with per-message **tool attribution**.
 - **Per-project** persistent SQLite store — each Burp project gets its own isolated log; logs from
   one project never appear in another.
-- **Per-tab logging toggles** — log only the tools you care about.
-- **Purge by tab** or by age, or purge everything.
+- **Per-tool logging toggles** plus an **All tools** master switch — log only what you care about.
+- **Optional persistence** — keep logs on disk (default) or have this project's DB discarded when
+  the extension unloads.
 - **Substring and regex search** across url, headers, and bodies.
 - **Batch body retrieval** so an agent can pull many full request/responses in one call.
 - **Scanner findings** (audit issues) exposed live, with evidence.
+- **Purge by tool, by age, or everything** (a full reset also compacts the file to reclaim disk),
+  with a live storage readout in the UI.
 - Async batched writer keeps logging off Burp's request path.
 
 ## MCP tools
@@ -51,6 +55,17 @@ So each project has its own store, and reopening a project reconnects to its own
 > UUID (and thus the link to the DB) is lost on close. For logs that survive restarts, use a
 > **saved (disk) project**.
 
+**Persistence toggle.** By default logs are kept on disk and survive restarts. Unchecking *Persist
+logs to disk* in the tab deletes this project's DB files when the extension unloads (Burp close /
+project switch); logging still works normally during the session. The preference is stored per
+project. (This is delete-on-exit, not zero-disk — data is written during the session and removed on
+a clean unload, so a hard crash could leave the file behind.)
+
+**Reclaiming space.** Deleting rows alone doesn't shrink the SQLite file — SQLite reuses freed
+pages rather than returning them to the OS. The full reset (*Purge ALL Logs / Reset Current Project
+DB*, and the MCP `purge_logs` all-wipe) runs `VACUUM` afterward, so it compacts the file and the
+storage readout drops. Per-tool and by-age purges don't shrink the file.
+
 ## Capture timing (important)
 
 The capture hook is an `HttpHandler`, which only sees traffic that flows **after** the extension
@@ -75,9 +90,18 @@ so the first build needs internet.
 
 ## Install
 
-Burp → **Extensions → Installed → Add → Java →** select the shadow jar. A **Logger MCP** tab
-appears with per-tool checkboxes and purge buttons; the Output log prints the DB path and the MCP
-endpoint (`http://127.0.0.1:8765/mcp`).
+Burp → **Extensions → Installed → Add → Java →** select the shadow jar. The Output log prints the
+DB path and the MCP endpoint (`http://127.0.0.1:8765/mcp`).
+
+A **Logger MCP** tab appears with:
+
+- the MCP endpoint and a live **Storage used** readout;
+- a **Persist logs to disk** toggle (off = this project's DB is deleted when the extension unloads);
+- an **All tools** master toggle, plus a per-tool toggle and **Purge** button for each tracked tool
+  (Target, Proxy, Scanner, Intruder, Repeater, Extensions);
+- **Purge ALL Logs / Reset Current Project DB** — clears this project's logs and compacts the file;
+- **Delete ALL Project Databases** (bottom-right) — resets the current project and removes every
+  other project's stored logs from disk.
 
 ## Connect an MCP client
 

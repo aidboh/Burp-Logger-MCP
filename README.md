@@ -81,7 +81,7 @@ Requires JDK 17+.
 
 ```bash
 gradle shadowJar
-# -> build/libs/burp-logger-mcp-0.1.0.jar
+# -> build/libs/burp-logger-mcp-0.1.2.jar
 ```
 
 Set the Montoya version in `build.gradle.kts` to the latest you have. The dependencies

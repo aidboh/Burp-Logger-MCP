@@ -114,13 +114,16 @@ public class ConfigPanel extends JPanel {
                     "Delete the log databases for ALL projects (every project, not just this one)?\n"
                     + "This resets the current project and permanently removes every other project's "
                     + "stored logs from disk.",
-                    "Confirm — Affects ALL Projects", JOptionPane.YES_NO_OPTION);
+                    "Confirm — affects ALL projects", JOptionPane.YES_NO_OPTION);
             if (ok == JOptionPane.YES_OPTION) {
+                long before = store.projectsDirSizeBytes();
                 int others = store.deleteOtherProjectDatabases();
                 store.purge(null, null); // reset the current (open) project's DB in place
+                long reclaimed = Math.max(0, before - store.projectsDirSizeBytes());
                 updateStorage();
                 JOptionPane.showMessageDialog(this,
-                        "Reset this project and deleted " + others + " other project database(s).");
+                        "Reset this project and deleted " + others + " other project database(s).\n"
+                        + "Reclaimed " + LogStore.humanBytes(reclaimed) + " of disk space.");
             }
         });
         JPanel south = new JPanel(new FlowLayout(FlowLayout.RIGHT));

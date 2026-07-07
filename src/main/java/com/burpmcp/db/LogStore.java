@@ -351,6 +351,20 @@ public class LogStore {
         return total;
     }
 
+    /** Total on-disk size of ALL project databases in the projects directory (every .db + sidecars). */
+    public long projectsDirSizeBytes() {
+        long total = 0;
+        try (java.util.stream.Stream<Path> files = Files.list(dbPath.getParent())) {
+            for (Path p : (Iterable<Path>) files::iterator) {
+                String name = p.getFileName().toString();
+                if (name.endsWith(".db") || name.endsWith(".db-wal") || name.endsWith(".db-shm")) {
+                    try { total += Files.size(p); } catch (Exception ignored) {}
+                }
+            }
+        } catch (Exception ignored) {}
+        return total;
+    }
+
     /** Formats a byte count as B / KB / MB / GB. */
     public static String humanBytes(long bytes) {
         if (bytes < 1024) return bytes + " B";
